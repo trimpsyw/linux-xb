@@ -7,33 +7,27 @@
  * 作者: 孙明保
  * 邮箱: sunmingbao@126.com
  */
-#include <windows.h>
-#include "common.h"
-#include <tchar.h>     
+
 #include <stdio.h>
+#include <string.h>
 #include <ctype.h>
-#include <winsock2.h>
-#include <iphlpapi.h>
+#include "common.h"
 #include "net.h"
-#include "global_info.h"
 
 void ip_str2n(void *field_addr, char *info)
 {
     *(unsigned int *)field_addr=inet_addr(info);
 }
 
-void* ip_n2str(char *info, void * field_addr)
+void ip_n2str(char *info, void * field_addr)
 {
-    static char ip_str[3*4+3+1];
-    uint32_t addr = ntohl(*(unsigned int*)field_addr);
-    char *output = info?info:ip_str;
-            sprintf(output, "%d.%d.%d.%d"
+    unsigned int addr = ntohl(*(unsigned int*)field_addr);
+            sprintf(info, "%d.%d.%d.%d"
             , (addr>>24) & 0xff
             , (addr>>16) & 0xff
             , (addr>>8) & 0xff
             , (addr) & 0xff);
 
-    return output;
 }
 
 
@@ -84,69 +78,9 @@ void ip6_addr_uniform(char *input)
     sprintf(ipv4_begin+7, "%02x", (unsigned)v4_addr[3]);
 }
 
-void ip6_addr_no_mh(char *dst, char *src)
-{
-    int i=0;
-	char *p_digit = src;
-	while (*p_digit!=0)
-	{
-		if (*p_digit==':') *p_digit=0;
-		p_digit++;		
-	}
-    
-	p_digit = src;
-    dst[0]=0;
-	while (isxdigit(*p_digit))
-	{
-	    sprintf(dst+i*4, "%04s", p_digit);
-	    p_digit += strlen(p_digit)+1;
-        i++;
-		
-	}
-}
 
-void ip6_str2n(void *field_addr, char *info)
-{
-    char str_addr[64];
-    char *db_mh;
-    char pure_digits[33];
-    char pure_digits_hdr[64]={0};
-    char pure_digits_tail[64]={0};
-    char tmp_str[3] = {0};
-    int i;
-    unsigned char *dst = field_addr;
-    trim_addr(str_addr, info);
-    ip6_addr_uniform(str_addr);
-    memset(pure_digits, '0', sizeof(pure_digits));
-    pure_digits[32]=0;
-    db_mh=strstr(str_addr, "::");
 
-    *(str_addr + strlen(str_addr) + 1)=0;
-    if (NULL==db_mh)
-    {
-    	ip6_addr_no_mh(pure_digits_hdr, str_addr);
-    }
-    else
-    {
-        *db_mh = 0;
-        *(db_mh+1) = 0;
-        ip6_addr_no_mh(pure_digits_hdr, str_addr);
-        ip6_addr_no_mh(pure_digits_tail, db_mh+2);
-    }
 
-    memcpy(pure_digits, pure_digits_hdr, strlen(pure_digits_hdr));
-    memcpy(pure_digits+32-strlen(pure_digits_tail)
-        , pure_digits_tail
-        , strlen(pure_digits_tail));
-
-	for (i=0;i<32;i+=2)
-	{
-		tmp_str[0] = pure_digits[i];
-		tmp_str[1] = pure_digits[i+1];
-		dst[i/2]=strtol(tmp_str,NULL,16);
-	}
-
-}
 
 void ip6_n2str(char *info, void * field_addr)
 {
@@ -363,41 +297,6 @@ int get_eth_type_name(int type, char *info)
 
 }
 
-int get_eth_type_value(char *name)
-{
-    int i;
-    for (i=0;i<ARRAY_SIZE(gat_eth_type);i++)
-    {
-        if (0==strcmp(gat_eth_type[i].name, name))
-        {
-            return gat_eth_type[i].value;
-        }
-    }
-
-    return str2int(name);
-
-}
-
-void init_eth_type_comb(HWND comb)
-{
-    int i;
-    clear_comb(comb);
-
-    for (i=0;i<ARRAY_SIZE(gat_eth_type);i++)
-    {
-        ComboBox_AddString(comb,(LPARAM)gat_eth_type[i].name);
-    }
-}
-
-int get_eth_type_comb(HWND comb)
-{
-    char info[64];
-
-    ComboBox_GetText(comb, info, sizeof(info));
-
-    return get_eth_type_value(info);
-}
-
 
 char *protocol_name_map[] = 
 {
@@ -570,48 +469,6 @@ void get_protocol_name(int protocol, char *name)
 }
 
 
-void get_src_addr(char *info, t_ether_packet *pt_eth_hdr)
-{
-    __u16 type = eth_type(pt_eth_hdr);
-        if (type==ETH_P_IP)
-        {
-            t_ip_hdr *iph=eth_data(pt_eth_hdr);
-                ip_n2str(info, &(iph->saddr));
-
-        }
-        else if (type==ETH_P_IPV6)
-        {
-            t_ipv6_hdr *ip6h=eth_data(pt_eth_hdr);
-                ip6_n2str(info, &(ip6h->saddr));
-        }
-        else
-        {
-            mac_n2str(info, pt_eth_hdr->src);
-        }
-
-}
-
-void get_dst_addr(char *info, t_ether_packet *pt_eth_hdr)
-{
-    __u16 type = eth_type(pt_eth_hdr);
-        if (type==ETH_P_IP)
-        {
-            t_ip_hdr *iph=eth_data(pt_eth_hdr);
-                ip_n2str(info, &(iph->daddr));
-
-        }
-        else if (type==ETH_P_IPV6)
-        {
-            t_ipv6_hdr *ip6h=eth_data(pt_eth_hdr);
-                ip6_n2str(info, &(ip6h->daddr));
-        }
-        else
-        {
-            mac_n2str(info, pt_eth_hdr->dst);
-        }
-
-}
-
 void get_proto_name(char *info, t_ether_packet *pt_eth_hdr)
 {
     __u16 type = eth_type(pt_eth_hdr);
@@ -638,50 +495,6 @@ void get_proto_name(char *info, t_ether_packet *pt_eth_hdr)
         sprintf(info, "%s", info2);
 }
 
-void append_err_text(char *info, uint32_t err_flags)
-{
-    if (err_flags==0) return;
-    
-    strcat(info, "(error:");
-    if (err_flags&ERR_IP_CHECKSUM)
-    {
-        strcat(info, "ip check sum");
-        goto exit;
-    }
-
-    if (err_flags&ERR_ICMP_CHECKSUM)
-    {
-        strcat(info, "icmp check sum");
-        goto exit;
-    }
-
-    if (err_flags&ERR_IGMP_CHECKSUM)
-    {
-        strcat(info, "igmp check sum");
-        goto exit;
-    }
-
-    if (err_flags&ERR_TCP_CHECKSUM)
-    {
-        strcat(info, "tcp check sum");
-        goto exit;
-    }
-
-    if (err_flags&ERR_UDP_CHECKSUM)
-    {
-        strcat(info, "udp check sum");
-        goto exit;
-    }
-
-    if (err_flags&ERR_PKT_LEN)
-    {
-        strcat(info, "packet length");
-        goto exit;
-    }
-exit:
-    strcat(info, ")");
-    
-}
 
 void get_pkt_desc_info_v4(char *info, void* p_eth_hdr)
 {
@@ -755,11 +568,7 @@ void get_pkt_desc_info_v6(char *info, void* p_eth_hdr)
             return;
 
         case IPPROTO_ICMPV6:
-            if ((pt_icmp_hdr->type==135))
-                strcpy(info, "Neighbor Solicitation");
-            else if ((pt_icmp_hdr->type==136))
-                strcpy(info, "Neighbor Advertisement");
-            else if ((pt_icmp_hdr->type==128)  && (pt_icmp_hdr->code==0) )
+            if ((pt_icmp_hdr->type==128)  && (pt_icmp_hdr->code==0) )
                 strcpy(info, "ping request");
             else if ((pt_icmp_hdr->type==129)  && (pt_icmp_hdr->code==0) )
                 strcpy(info, "ping reply");
@@ -772,106 +581,7 @@ void get_pkt_desc_info_v6(char *info, void* p_eth_hdr)
 
 }
 
-void get_pkt_desc_info(char *info, void* p_eth_hdr, uint32_t err_flags)
-{
-    t_ether_packet *pt_eth_hdr = p_eth_hdr;
-    t_arp_hdr *arp_hdr = eth_data(pt_eth_hdr);
-    char info_2[64];
-    int type = eth_type(pt_eth_hdr);
 
-    info[0]=0;
-    
-    switch (type)
-    {
-        case ETH_P_ARP:
-            if (ntohs(arp_hdr->ar_op)==1)
-            {
-                if (4==arp_hdr->ar_pln)
-                {
-                    ip_n2str(info_2, arp_hdr->ar_tip);
-                    sprintf(info, "who has %s? tell ", info_2);
-                    ip_n2str(info_2, arp_hdr->ar_sip);
-                    strcat(info, info_2);
-                }
-                else if (16==arp_hdr->ar_pln)
-                {
-                    ip6_n2str(info_2, arp_hdr->ar_sip+22);
-                    sprintf(info, "who has %s? tell ", info_2);
-                    ip6_n2str(info_2, arp_hdr->ar_sip);
-                    strcat(info, info_2);
-                }
-            }
-            else if (ntohs(arp_hdr->ar_op)==2)
-            {
-                if (4==arp_hdr->ar_pln)
-                {
-                    ip_n2str(info_2, arp_hdr->ar_sip);
-                    sprintf(info, "%s is at ", info_2);
-                    mac_n2str(info_2, arp_hdr->ar_sha);
-                    strcat(info, info_2);
-                }
-                else if (16==arp_hdr->ar_pln)
-                {
-                    ip6_n2str(info_2, arp_hdr->ar_sip);
-                    sprintf(info, "%s is at ", info_2);
-                    mac_n2str(info_2, arp_hdr->ar_sha);
-                    strcat(info, info_2);
-                }
-            }
-            
-            goto append_err_info;
-            
-        case ETH_P_RARP:
-            strcpy(info, "rarp");
-            goto append_err_info;
-
-        case ETH_P_LOOP:
-            strcpy(info, "Ethernet Loopback packet");
-            goto append_err_info;
-
-        case ETH_P_ECHO:
-            strcpy(info, "Ethernet Echo packet");
-            goto append_err_info;
-            
-        case ETH_P_PPP_DISC:
-            strcpy(info, "PPPoE discovery messages");
-            goto append_err_info;
-            
-        case ETH_P_PPP_SES:
-            strcpy(info, "PPPoE session messages");
-            goto append_err_info;
-            
-
-    }
-
-    if (type!=ETH_P_IP && type!=ETH_P_IPV6)
-    {
-        sprintf(info, "eth type:0x%04x", type);
-            goto append_err_info;
-    }
-
-    if (ip_pkt_is_frag(pt_eth_hdr))
-    {
-        sprintf(info, "frag ");
-        goto append_err_info;
-
-    }
-
-    if (type==ETH_P_IP)
-    {
-        get_pkt_desc_info_v4(info, p_eth_hdr);
-    }
-    else
-    {
-        get_pkt_desc_info_v6(info, p_eth_hdr);
-    }
-
-append_err_info:
-    append_err_text(info, err_flags);
-
-    return;
-
-}
 
 unsigned short tcp_udp_checksum6(t_ipv6_hdr *ip6h)
 {
@@ -992,152 +702,3 @@ int icmp_checksum_wrong6(t_ipv6_hdr *ip6h)
     return pt_icmp_hdr->checksum !=tcp_udp_checksum6(ip6h);
 }
 
-void update_check_sum_v4(t_stream *pt_stream)
-{
-    t_ip_hdr *iph=eth_data(pt_stream->data);
-    if (pt_stream->flags & CHECK_SUM_IP)
-        ip_update_check(iph);
-
-    if (ip_pkt_is_frag(&(pt_stream->eth_packet))) return;
-    
-    if (iph->protocol==IPPROTO_ICMP && (pt_stream->flags & CHECK_SUM_ICMP))
-        icmp_igmp_update_check(iph);
-    else if (iph->protocol==IPPROTO_IGMP && (pt_stream->flags & CHECK_SUM_IGMP))
-        icmp_igmp_update_check(iph);
-    else if (iph->protocol==IPPROTO_TCP && (pt_stream->flags & CHECK_SUM_TCP))
-        tcp_update_check(iph);
-    else if (iph->protocol==IPPROTO_UDP && (pt_stream->flags & CHECK_SUM_UDP))
-        udp_update_check(iph);
-
-}
-
-void update_check_sum_v6(t_stream *pt_stream)
-{
-    t_ipv6_hdr *ip6h=eth_data(pt_stream->data);
-
-    if (ip_pkt_is_frag(&(pt_stream->eth_packet))) return;
-
-    if (ip6h->nexthdr==IPPROTO_TCP && (pt_stream->flags & CHECK_SUM_TCP))
-        tcp_update_check6(ip6h);
-    else if (ip6h->nexthdr==IPPROTO_UDP && (pt_stream->flags & CHECK_SUM_UDP))
-        udp_update_check6(ip6h);
-    else if (ip6h->nexthdr==IPPROTO_ICMPV6 && (pt_stream->flags & CHECK_SUM_ICMP))
-        icmp_update_check6(ip6h);
-
-}
-
-void update_check_sum(t_stream *pt_stream)
-{
-    int type = eth_type(pt_stream->data);
-    if (type==ETH_P_IP)
-        update_check_sum_v4(pt_stream);
-   else if (type==ETH_P_IPV6)
-       update_check_sum_v6(pt_stream);
-
-}
-
-
-void update_len_v4(t_stream *pt_stream)
-{
-    t_ip_hdr *iph=eth_data(pt_stream->data);
-    t_udp_hdr *udph=ip_data(iph);
-    if (pt_stream->flags & IP_LEN)
-        iph->tot_len = htons(pt_stream->len - eth_hdr_len(pt_stream->data));
-    if (iph->protocol==IPPROTO_UDP && (pt_stream->flags & UDP_LEN))
-        udph->len = htons(pt_stream->len - eth_hdr_len(pt_stream->data) - ip_hdr_len(iph));
-
-}
-
-void update_len_v6(t_stream *pt_stream)
-{
-    t_ipv6_hdr *ip6h =eth_data(pt_stream->data);
-    t_udp_hdr *udph=ip6_data(ip6h);
-    if (pt_stream->flags & IP_LEN)
-        set_ip6_pkt_len(ip6h, pt_stream->len - eth_hdr_len(pt_stream->data));
-    if (ip6h->nexthdr==IPPROTO_UDP && (pt_stream->flags & UDP_LEN))
-        udph->len = htons(ip6_data_len(ip6h));
-
-}
-
-void update_len(t_stream *pt_stream)
-{
-int type = eth_type(pt_stream->data);
-    if (type==ETH_P_IP)
-        update_len_v4(pt_stream);
-   else if (type==ETH_P_IPV6)
-       update_len_v6(pt_stream);
-}
-
-int ipv4_fragable(t_ip_hdr *iph)
-{
-    if(ntohs(iph->frag_off)&((1<<14) - 1))
-        return 0;
-        
-    if (ip_data_len(iph)<=8)
-        return 0;
-
-    return 1;
-}
-
-int ipv6_fragable(t_ipv6_hdr *ipv6h)
-{
-    if (IPPROTO_FRAGMENT==ipv6h->nexthdr)
-        return 0;
-    
-    if (ip6_data_len(ipv6h)<=8)
-        return 0;
-
-    return 1;
-}
-
-int stream_fragable(t_stream *pt_stream)
-{
-    int type = eth_type(pt_stream->data);
-    if (type==ETH_P_IP)
-        return ipv4_fragable(eth_data(pt_stream->data));
-   else if (type==ETH_P_IPV6)
-       return ipv6_fragable(eth_data(pt_stream->data));
-
-    return 0;
-}
-
-
-void * get_nic_FriendlyName(const char *name)
-{
-    DWORD dwSize = 0;
-    DWORD dwRetVal = 0;
-    char buf[15000];
-    char FriendlyName[128]="获取网卡名失败";
-    unsigned int i = 0;
-
-    ULONG family = AF_UNSPEC;
-    PIP_ADAPTER_ADDRESSES pAddresses = (void *)buf;
-    ULONG outBufLen = sizeof(buf);
-    PIP_ADAPTER_ADDRESSES pCurrAddresses = NULL;
-
-    dwRetVal = GetAdaptersAddresses(family, 0, NULL, pAddresses, &outBufLen);
-
-
-    if (NULL==name || name[0]!='{') goto EXIT;
-    if (dwRetVal != NO_ERROR) goto EXIT;
-
-    pCurrAddresses = pAddresses;
-    while (pCurrAddresses) 
-    {
-        if (0==memcmp(pCurrAddresses->AdapterName, name, 38))
-        {
-            /* pCurrAddresses->FriendlyName为UNICODE编码，存储类型为WCHAR 
-               将他转换成GBK编码 */
-            WideCharToMultiByte(CP_ACP, 0, pCurrAddresses->FriendlyName,
-                -1,  FriendlyName, 128,  NULL,  NULL);
-
-            break;
-
-        }
-        
-        pCurrAddresses = pCurrAddresses->Next;
-    }
-
-EXIT:
-    return FriendlyName;
-}

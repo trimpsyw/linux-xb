@@ -11,11 +11,8 @@
 #ifndef __NET_H_
 #define __NET_H_
 
-#include <tchar.h> 
-#include <commctrl.h>
-#include <windows.h>
-#include <windowsx.h>
 #include <stdint.h>
+#include <arpa/inet.h>
 #include "defs.h"
 
 
@@ -29,8 +26,8 @@ typedef struct
 {
     unsigned char dst[6];
     unsigned char src[6];
-    uint16_t      type;
-} __attribute__((packed)) t_ether_packet;
+    unsigned short type;
+} __attribute__ ((packed)) t_ether_packet;
 
 #define ETH_P_VLAN	0x8100		/* Ethernet Loopback packet	*/
 #define ETH_P_LOOP	0x0060		/* Ethernet Loopback packet	*/
@@ -49,7 +46,7 @@ typedef struct
     unsigned char src[6];
     char     tag_802_1Q[4];
     unsigned short type;
-} __attribute__((packed)) t_ether_vlan_packet;
+} __attribute__ ((aligned (1))) t_ether_vlan_packet;
 
 static inline uint16_t get_u16_from_pkt(const void *p_eth_hdr, int offset)
 {
@@ -125,18 +122,13 @@ static inline int eth_hdr_len(const void *p_eth_hdr)
     return ret + get_vlan_tag_nr(p_eth_hdr)*4;
 }
 
+
 static inline void * eth_data(const void *p_eth_hdr)
 {
     return (void *)p_eth_hdr+eth_hdr_len(p_eth_hdr);
 }
 
 
-#define  IPPROTO_IP    0
-#define  IPPROTO_ICMP  1
-#define  IPPROTO_IGMP  2
-#define  IPPROTO_IPIP  4
-#define  IPPROTO_TCP   6
-#define  IPPROTO_UDP  17
 
 typedef struct 
 {
@@ -377,12 +369,6 @@ typedef struct
 	__u16	len;
 } __attribute__((packed)) t_tcp_udp_pseudo_hdr6;
 
-#define IPPROTO_HOPOPTS		0	/* IPv6 hop-by-hop options	*/
-#define IPPROTO_ROUTING		43	/* IPv6 routing header		*/
-#define IPPROTO_FRAGMENT	44	/* IPv6 fragmentation header	*/
-#define IPPROTO_ICMPV6		58	/* ICMPv6			*/
-#define IPPROTO_NONE		59	/* IPv6 no next header		*/
-#define IPPROTO_DSTOPTS		60	/* IPv6 destination options	*/
 
 static inline int ip_pkt_is_frag(t_ether_packet *pt_eth_hdr)
 {
@@ -420,82 +406,11 @@ int get_eth_type_name(int type, char *info);
 
 
 void ip_str2n(void *field_addr, char *info);
-void* ip_n2str(char *info, void * field_addr);
+void ip_n2str(char *info, void * field_addr);
 void ip6_n2str(char *info, void * field_addr);
 void ip6_str2n(void *field_addr, char *info);
 
-typedef struct
-{
-    char     valid;
-    uint32_t flags;
-    uint16_t offset;
-    uint8_t  width;
-    char     bits_from;
-    char     bits_len;
-    char     rsv[4];
-    uint8_t base_value[8];
-    uint8_t max_value[8];
-    uint32_t step_size;
-} __attribute__((packed)) t_rule;
 
-#define    MAX_FIELD_RULE_NUM    (10)
-typedef struct
-{
-    int32_t  selected;
-    char snd_cnt;
-    char rsv[7];
-    char name[64];
-    uint32_t flags;
-    unsigned char    rule_num;
-    unsigned char    rule_idx[MAX_FIELD_RULE_NUM];
-    t_rule  at_rules[MAX_FIELD_RULE_NUM];
-    int32_t len;
-    union
-    {
-        t_ether_packet eth_packet;
-        unsigned char data[MAX_PACKET_LEN];
-    };
-
-    //non save info
-    uint32_t err_flags;
-
-} __attribute__((packed)) t_stream;
-
-/* t_stream.flags */
-#define    CHECK_SUM_IP      0x1
-#define    CHECK_SUM_ICMP    0x2
-#define    CHECK_SUM_IGMP    0x4
-#define    CHECK_SUM_UDP     0x8
-#define    CHECK_SUM_TCP     0x10
-#define    CHECK_SUM_ALL  \
-    (CHECK_SUM_IP|CHECK_SUM_ICMP|CHECK_SUM_IGMP|CHECK_SUM_UDP|CHECK_SUM_TCP)
-
-#define    IP_LEN    0x20
-#define    UDP_LEN   0x40
-#define    LEN_ALL  (IP_LEN|UDP_LEN)
-
-
-#define    ERR_IP_CHECKSUM     (0x1<<30)
-#define    ERR_UDP_CHECKSUM    (0x1<<29)
-#define    ERR_TCP_CHECKSUM    (0x1<<28)
-#define    ERR_PKT_LEN         (0x1<<27)
-#define    ERR_ICMP_CHECKSUM    (0x1<<26)
-#define    ERR_IGMP_CHECKSUM    (0x1<<25)
-
-#define    STREAM_HDR_LEN    ((unsigned long)(void *)(&(((t_stream *)NULL)->data)))
-
-#define    MAX_STREAM_NUM    100
-extern int  nr_cur_stream;
-extern int  copy_idx;
-extern t_stream    *g_apt_streams[MAX_STREAM_NUM];
-extern int32_t        nr_stream2snd;
-extern t_stream    *g_apt_streams2snd;
-void init_stream(t_stream    *pt_streams);
-int make_frags(const t_stream *pt_stream, int frag_payload);
-void get_pkt_desc_info(char *info, void* p_eth_hdr, uint32_t err_flags);
-uint32_t  build_err_flags(t_ether_packet *pt_eth, int len);
-void update_stream(t_stream* pt_stream);
-int delete_all_rule(t_stream *pt_stream);
 
 void get_src_addr(char *info, t_ether_packet *pt_eth_hdr);
 void get_dst_addr(char *info, t_ether_packet *pt_eth_hdr);
@@ -513,14 +428,6 @@ unsigned short tcp_udp_checksum6(t_ipv6_hdr *ip6h);
 
 extern char *protocol_name_map[];
 
-#include <pcap.h>
-typedef struct
-{
-    struct pcap_pkthdr header;
-    uint32_t pkt_idx;
-    uint32_t err_flags;
-    u_char  pkt_data[0];
-}__attribute__((packed)) t_dump_pkt;
 
 #endif
 

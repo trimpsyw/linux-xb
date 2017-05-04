@@ -8,28 +8,54 @@
  * ” œ‰: sunmingbao@126.com
  */
 
-#ifndef __DEBUG_H_
-#define __DEBUG_H_
+#ifndef  __DEBUG_H__
+#define  __DEBUG_H__
 
-#define WIDEN2(x) L ## x
-#define WIDEN(x) WIDEN2(x)
-#define __WFILE__ WIDEN(__FILE__)
+#include <stdint.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
 
-
-void __dbg_print_w(WCHAR * szFormat, ...);
-void __dbg_print(TCHAR * szFormat, ...);
-
-#define    dbg_print(fmt, args...) \
+#define    DBG_PRINT(fmt, args...) \
     do \
     { \
-        __dbg_print("DBG:%s(%d)-%s:\n"fmt"\n", __FILE__,__LINE__,__FUNCTION__,##args); \
+        printf("DBG:%s(%d)-%s:\n"fmt"\n", __FILE__,__LINE__,__FUNCTION__,##args); \
     } while (0)
 
-#define    dbg_print_w(fmt, args...) \
+#define    DBG_PRINT_S(fmt, args...) \
     do \
     { \
-        __dbg_print_w(L"DBG:%s(%d):\n"fmt"\n", __WFILE__,__LINE__,,##args); \
+        printf("DBG:%s(%d)-%s:\n"fmt"\n", strrchr(__FILE__, '/')+1,__LINE__,__FUNCTION__,##args); \
     } while (0)
+
+#define    DBG_PRINT_QUIT(fmt, args...) \
+    do \
+    { \
+        printf("DBG:%s(%d)-%s:\n"fmt"\n", __FILE__,__LINE__,__FUNCTION__,##args); \
+        exit(1); \
+    } while (0)
+
+#define    ERR_DBG_PRINT(fmt, args...) \
+    do \
+    { \
+        printf("ERR_DBG:%s(%d)-%s:\n"fmt": %s\n", __FILE__,__LINE__,__FUNCTION__,##args, strerror(errno)); \
+    } while (0)
+
+#define    ERR_DBG_PRINT_QUIT(fmt, args...) \
+    do \
+    { \
+        printf("ERR_DBG_QUIT:%s(%d)-%s:\n"fmt": %s\n", __FILE__,__LINE__,__FUNCTION__,##args, strerror(errno)); \
+        exit(1); \
+    } while (0)
+
+void print_mem(void *start_addr, uint32_t length);
+
+static inline void get_tmp_file_name(char *buf, int len)
+{
+    snprintf(buf, len, "/tmp/tmp_file.%d", getpid());
+}
 
 #endif
 

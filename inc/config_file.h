@@ -113,5 +113,10 @@ extern const char *app_name;
 extern const char version[4];
 int load_config_file(char *file_path, unsigned char *src_mac, unsigned char *dst_mac);
 int load_bin_packet_file(char *file_path, unsigned char *src_mac, unsigned char *dst_mac);
+int make_packet(const char *protocol, const unsigned char *src_mac, const unsigned char *dst_mac,  
+                    const char *src, const char *dst, 
+                    unsigned short sport, unsigned short dport,
+                    const char *payload, int len);
+
 #endif
 

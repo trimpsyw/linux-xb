@@ -41,6 +41,7 @@ static int  has_src_mac, has_dst_mac;
 static int  no_wait, write_tap;
 static int be_sending, need_stop;
 static int  fd;
+static unsigned short sport = 54000, dport = 3456;
 
 typedef struct
 {
@@ -59,16 +60,17 @@ static int  pkt_file_type = -1;
 static char *config_file;
 static int   burst_num;
 static char  *if_name;
+static char *src;
+static char *dst;
+static char *payload;
 static int   cpu_idx = -1;
 static int64_t   snd_interval = 1000000;
 static int64_t   frequency = 1;
 
 
-
-
 #define    HELP                (999)
 #define    ENABLE_MAX_SPEED    (1000)
-#define    CONFIG_FILE          (1001)
+#define    CONFIG_FILE         (1001)
 #define    BURST_NUM           (1002)
 #define    INTERVAL            (1003)
 #define    PPS                 (1004)
@@ -82,24 +84,36 @@ static int64_t   frequency = 1;
 #define    SET_DST_MAC         (1012)
 #define    NO_WAIT             (1013)
 #define    WRITE_TAP           (1014)
+#define    SET_SRC             (1015)
+#define    SET_DST             (1016)
+#define    SET_SPORT           (1017)
+#define    SET_DPORT           (1018)
+#define    SET_PROTOCOL        (1019)
+#define    SET_PAYLOAD        (1020)
+
 struct option my_options[] =
     {
         {"help",              no_argument,       NULL, HELP},
         {"version",           no_argument,       NULL, VERSION},
         {"config-file",       required_argument, NULL, CONFIG_FILE},
         {"bin-pkt-file",      required_argument, NULL, SINGLE_BIN_PKT},
-        //{"cap-file",          required_argument, NULL, CAP_PKT_FILE},
+        {"protocol",       required_argument, NULL, SET_PROTOCOL},
         {"interface",         required_argument, NULL, INTERFACE},
         {"bind-cpu",          required_argument, NULL, BIND_CPU},
         {"enable-max-speed",  no_argument,       NULL, ENABLE_MAX_SPEED},
         {"burst-num",         required_argument, NULL, BURST_NUM},
         {"interval",          required_argument, NULL, INTERVAL},
         {"pps",               required_argument, NULL, PPS},
-        {"set-src-mac",       required_argument, NULL, SET_SRC_MAC},
-        {"set-dst-mac",       required_argument, NULL, SET_DST_MAC},
-        {"send-all",          no_argument,       NULL, SEND_ALL},
+        {"smac",               required_argument, NULL, SET_SRC_MAC},
+        {"dmac",                required_argument, NULL, SET_DST_MAC},
+        {"saddr",           required_argument, NULL, SET_SRC},
+        {"daddr",           required_argument, NULL, SET_DST},
+        {"sport",         required_argument, NULL, SET_SPORT},
+        {"dport",         required_argument, NULL, SET_DPORT},
+        {"payload",         required_argument, NULL, SET_PAYLOAD},
+        //{"send-all",          no_argument,       NULL, SEND_ALL},
         {"no-wait",           no_argument,       NULL, NO_WAIT},
-        {"write-tap",         no_argument,       NULL, WRITE_TAP},
+        //{"write-tap",         no_argument,       NULL, WRITE_TAP},
         {0},
     };
 
@@ -109,7 +123,7 @@ const char *opt_remark[][2] = {
     {"(-v or -V for short)","show version"}, 
     {"(-f or -F for short)","specify config file"}, 
     {"","specify raw binary packet file contains one packet"}, 
-    //{"","specify capture file contains packets"}, 
+    {"(-p for short)","specify protocol (only support tcp, udp, icmp)"}, 
     {"(-i or -I for short)","interface to use for sending packets"}, 
     {"","bind sending thread to a free cpu. based from 0"},
     {"(-m or -M for short)", "send packet with max speed"}, 
@@ -118,8 +132,13 @@ const char *opt_remark[][2] = {
     {"", "how many packets to send in one second"},
     {"", "set src mac of each packet"},
     {"", "set dst mac of each packet"},
-    {"", "send all packets in config file, including packets not selected"},
-    {"", "create tap interface whose name is given in -i option, and write packets to tap interface."},
+    {"", "set src addr of each packet"},
+    {"", "set dst addr of each packet"},
+    {"", "set src port of each packet (default 54000)"},
+    {"", "set dst dport of each packet (default 3456)"},
+    {"", "set payload of each packet"},
+    //{"", "send all packets in config file, including packets not selected"},
+    //{"", "create tap interface whose name is given in -i option, and write packets to tap interface."},
     {"", "no wait before sending and finish sending"},
 };
 
@@ -129,12 +148,9 @@ void print_usage()
     int i, opt_num = ARRAY_SIZE(my_options);
     char *arg;
     printf("%s(v%s) \n"
-        "for usage detail, visit http://blog.csdn.net/crazycoder8848/article/details/47209427\n"
         "Usage example:\n"
-        "  ./%s --config-file=my_cfg.etc -i eth0  --pps=3\n",
+        "  ./%s  -i eth0  -p tcp/udp/icmp --pps=3  --smac=12:34:56:78:9A:BC --dmac=12:34:56:78:9A:BC --saddr=192.168.1.2 --daddr=192.168.1.3 --sport=12345 --dport=23456 --payload=abcdefg\n",
                        app_name, version, app_name);
-
-
 
 
     printf("\n\noptions:\n");
@@ -147,15 +163,11 @@ void print_usage()
             , opt_remark[i][0]
             , arg
             , opt_remark[i][1]);
-
-
     }
 }
 
 void report_working_paras()
 {
-
-
     intvl.tv_sec = snd_interval/1000000;
     intvl.tv_usec = snd_interval%1000000;
     
@@ -179,7 +191,6 @@ void report_working_paras()
 int check_args()
 {
 
-
     if (config_file==NULL)
     {
         printf("you must provide a config file\n");
@@ -199,34 +210,36 @@ int check_args()
         goto FAIL_EXIT;
     }
 
+    if (sport<=0 || sport >= 65535 || dport<=0 || dport >= 65535)
+    {
+        printf("sport or dport invalid\n");
+        goto FAIL_EXIT;
+    }
+
+    if(payload == NULL || strlen(payload) > 1024) {
+        printf("len of payload must between 1 and 1024\n");
+        goto FAIL_EXIT;
+    }
+
 
 SUCC_EXIT:
-
-
     report_working_paras();
     return 0;
 
 
 FAIL_EXIT:
-        print_usage();
-        return -1;
-
-
+    print_usage();
+    return -1;
 }
-
-
-
 
 
 int parse_and_check_args(int argc, char *argv[])
 {
    int opt;
-    while ((opt = getopt_long(argc, argv, "hHmMi:I:f:F:", my_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "hHmMi:I:f:F:p:D", my_options, NULL)) != -1)
     {
        switch (opt)
        {
-
-
            case 'f':
            case 'F':
            case CONFIG_FILE: 
@@ -238,12 +251,17 @@ int parse_and_check_args(int argc, char *argv[])
                config_file = optarg;
                pkt_file_type = 1;
                break;
-#if 0
-           case CAP_PKT_FILE: 
+
+           case 'p': 
+           case SET_PROTOCOL: 
                config_file = optarg;
-               pkt_file_type = 2;
+               pkt_file_type = -1;
                break;
-#endif
+
+           case 'D': 
+           case SET_PAYLOAD: 
+               payload = optarg;
+               break;
 
            case 'i':
            case 'I':
@@ -282,6 +300,22 @@ int parse_and_check_args(int argc, char *argv[])
                mac_str2n(dst_mac, optarg);
                has_dst_mac = 1;
                break;
+
+           case SET_SRC:
+               src = optarg;
+               break;
+
+           case SET_DST:
+               dst = optarg;
+               break;
+
+           case SET_SPORT: 
+                sport = strtol(optarg, NULL, 0);
+               break;
+
+           case SET_DPORT:
+                dport = strtol(optarg, NULL, 0);
+               break;
                
            case SEND_ALL:
                send_all = 1;
@@ -291,9 +325,9 @@ int parse_and_check_args(int argc, char *argv[])
                no_wait = 1;
                break;
 
-           case WRITE_TAP:
-               write_tap = 1;
-               break;
+           //case WRITE_TAP:
+           //    write_tap = 1;
+           //    break;
                
            case 'v':
            case 'V':
@@ -322,8 +356,6 @@ int parse_and_check_args(int argc, char *argv[])
     return check_args();
 }
 
-
-
 static inline int time_a_smaller_than_b(struct timeval *a, struct timeval *b)
 {
     if (a->tv_sec < b->tv_sec) return 1;
@@ -332,9 +364,6 @@ static inline int time_a_smaller_than_b(struct timeval *a, struct timeval *b)
 
     return a->tv_usec < b->tv_usec;
 }
-
-
-
 
 struct timeval time_a_between_b2(struct timeval a, struct timeval b)
 {
@@ -348,7 +377,6 @@ struct timeval time_a_between_b2(struct timeval a, struct timeval b)
     ret.tv_usec = b.tv_usec-a.tv_usec;
     return ret;
 }
-
 
 void report_snd_summary()
 {
@@ -373,8 +401,6 @@ void report_snd_summary()
             ,LINE_HDR, gt_pkt_stat.send_fail, gt_pkt_stat.send_fail_bytes);
     else
         printf("[no packets sent fail]\n");
-
-
 }
 
 void init_bits(void *field_addr, t_rule *pt_rule)
@@ -637,50 +663,48 @@ int send_pkt(void *arg)
     next_snd_tv = cur_tv;
     goto SND_PKT;
 
-/* Send down the packet */
-while (!need_stop)
-{
-   if (enable_max_speed)
+    /* Send down the packet */
+    while (!need_stop)
     {
-        //gettimeofday(&cur_tv, NULL);
-         goto SND_PKT;
-    }
-        
-    do
-    {   
-       gettimeofday(&cur_tv, NULL);
+       if (enable_max_speed)
+        {
+            //gettimeofday(&cur_tv, NULL);
+             goto SND_PKT;
+        }
+            
+        do
+        {   
+           gettimeofday(&cur_tv, NULL);
             //nano_sleep(0, 330000000);
-    } while (!need_stop && time_a_smaller_than_b(&cur_tv, &next_snd_tv));
+        } while (!need_stop && time_a_smaller_than_b(&cur_tv, &next_snd_tv));
 
 
         if (need_stop) goto exit;
 
         last_snd_tv = cur_tv;
         
-            SND_PKT:
-            while (g_apt_streams[i]->selected==0 && !send_all)
-            {
-                i = (i+1)%nr_cur_stream;
-                if (need_stop) goto exit;
-            }
+SND_PKT:
+        while (g_apt_streams[i]->selected==0 && !send_all)
+        {
+            i = (i+1)%nr_cur_stream;
+            if (need_stop) goto exit;
+        }
 
-                gt_pkt_stat.send_total++;
-                gt_pkt_stat.send_total_bytes+=g_apt_streams[i]->len;
-                
-           if (write(fd, g_apt_streams[i]->data, g_apt_streams[i]->len) != g_apt_streams[i]->len)
-           {
-                gt_pkt_stat.send_fail++;
-                gt_pkt_stat.send_fail_bytes+=g_apt_streams[i]->len;
-           }
-            else
-            {
-                gt_pkt_stat.send_succ++;
-                gt_pkt_stat.send_succ_bytes+=g_apt_streams[i]->len;
-            }
-
-            if (g_apt_streams[i]->rule_num) rule_fileds_update(g_apt_streams[i]);
+        gt_pkt_stat.send_total++;
+        gt_pkt_stat.send_total_bytes+=g_apt_streams[i]->len;
             
+        if (write(fd, g_apt_streams[i]->data, g_apt_streams[i]->len) != g_apt_streams[i]->len)
+        {
+            gt_pkt_stat.send_fail++;
+            gt_pkt_stat.send_fail_bytes+=g_apt_streams[i]->len;
+        }
+        else
+        {
+            gt_pkt_stat.send_succ++;
+            gt_pkt_stat.send_succ_bytes+=g_apt_streams[i]->len;
+        }
 
+        if (g_apt_streams[i]->rule_num) rule_fileds_update(g_apt_streams[i]);
 
 
         send_times_cnt++;
@@ -705,7 +729,7 @@ exit:
           gettimeofday(&last_snd_tv, NULL);
     report_snd_summary();
     be_sending = 0;
-return 0;
+    return 0;
 }
 
 
@@ -738,10 +762,13 @@ int load_packets()
         ,has_src_mac?src_mac:NULL
         ,has_dst_mac?dst_mac:NULL);
 
-    if (1==pkt_file_type)
+    else if (1==pkt_file_type)
         return load_bin_packet_file(config_file
         ,has_src_mac?src_mac:NULL
         ,has_dst_mac?dst_mac:NULL);
+
+    else if (-1==pkt_file_type)
+        return make_packet(config_file, src_mac, dst_mac, src, dst, sport, dport, payload, strlen(payload));
 
     return 0;
 }
@@ -787,16 +814,11 @@ int prepare_tap_if(char *tap_name)
 //        ifr.ifr_flags |= IFF_ONE_QUEUE;
 //    }
 
-
-
-
     strcpy(ifr.ifr_name, tap_name);
     
     ret = ioctl(fd, TUNSETIFF, (void *) &ifr);
     if (ret != 0) 
     {
-
-
         ERR_DBG_PRINT("could not configure tap interface %s", tap_name);
         close(fd);
         return -1;
@@ -809,13 +831,13 @@ int prepare_tap_if(char *tap_name)
     fcntl(fd, F_SETFL, O_NONBLOCK);
     return fd;
 }
+
 int main(int argc, char *argv[])
 {
     int ret;
     pthread_t  the_thread;
     int dot_str_idx = 0;
     const char *dots[] = {"-", "\\", "|", "/"};
-
 
     if (parse_and_check_args(argc, argv))
     {
@@ -838,14 +860,12 @@ int main(int argc, char *argv[])
         while (getchar()!='s');
     }
 
-
     need_stop = 0;
     be_sending = 1;
     rule_fileds_init_all_pkt();
 
     create_thread(&the_thread, send_pkt, NULL);
     register_sig_act(SIGINT, my_sig_handler);
-
 
     printf("\n\n\n");
     while (be_sending)
@@ -866,9 +886,7 @@ int main(int argc, char *argv[])
         while (getchar()!='q');
     }
 
-
     return 0;
 }
 
 //./target/xb_ether_tester.exe  -i eth0 -f /home/sunmingbao/aaa.etc  -M
-

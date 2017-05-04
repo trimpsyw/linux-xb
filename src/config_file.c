@@ -20,8 +20,8 @@ t_pkt_cap_cfg  gt_pkt_cap_cfg;
 t_stream    *g_apt_streams[MAX_STREAM_NUM];
 int        nr_cur_stream;
 
-const char *app_name = "xb_ether_tester";
-const char version[4]={'1','1','5',0};
+const char *app_name = "pktsender";
+const char version[4]={'1','0','0',0};
 
 void *alloc_stream()
 {
@@ -118,7 +118,6 @@ uint32_t  build_err_flags_v6(t_ether_packet *pt_eth, int len)
             err_flags |= ERR_PKT_LEN;
             return err_flags; 
     }
-
 
 
     if (ip_pkt_is_frag(pt_eth))
@@ -272,13 +271,12 @@ void update_len_v6(t_stream *pt_stream)
 
 void update_len(t_stream *pt_stream)
 {
-int type = eth_type(pt_stream->data);
+    int type = eth_type(pt_stream->data);
     if (type==ETH_P_IP)
         update_len_v4(pt_stream);
-   else if (type==ETH_P_IPV6)
-       update_len_v6(pt_stream);
+    else if (type==ETH_P_IPV6)
+        update_len_v6(pt_stream);
 }
-
 
 void append_err_text(char *info, uint32_t err_flags)
 {
@@ -377,6 +375,7 @@ const char * err_text(uint32_t err_flags)
     return " ";
     
 }
+
 int load_config_file(char *file_path, unsigned char *src_mac, unsigned char *dst_mac)
 {
     FILE *file=fopen(file_path, "rb");
@@ -396,7 +395,6 @@ int load_config_file(char *file_path, unsigned char *src_mac, unsigned char *dst
         goto EXIT;
 
     }
-
 
     fread(&gt_pkt_cap_cfg, PKT_CAP_CFG_FIX_LEN, 1, file);
     fread(gt_pkt_cap_cfg.filter_str_usr, gt_pkt_cap_cfg.filter_str_len, 1, file);
@@ -457,3 +455,115 @@ int load_bin_packet_file(char *file_path, unsigned char *src_mac, unsigned char 
     return ret;
 }
 
+int make_packet(const char *protocol, const unsigned char *src_mac, const unsigned char *dst_mac,  
+                const char *src, const char *dst, 
+                unsigned short sport, unsigned short dport,
+                const char *payload, int len)
+{
+    int ret = 0;
+    int not_loaded_all = 0;
+    t_ether_packet *ether;
+    t_ip_hdr *iph;
+    t_tcp_hdr *tcph;
+    t_udp_hdr *udph;
+    t_icmp_hdr *icmph;
+    char *payloadd;
+    int len2;
+
+    if(sport == 0) 
+        sport = rand() % 1024 + 50000;
+    if(dport == 0)
+        dport = rand() % 1024 + 80;
+
+    nr_cur_stream = 1;
+    g_apt_streams[0] = alloc_stream();
+
+
+    ether = (t_ether_packet *)g_apt_streams[0]->data;
+    iph = (t_ip_hdr*)(ether + 1);
+
+    memcpy(ether->dst, dst_mac, 6);
+    memcpy(ether->src, src_mac, 6);
+    ether->type = htons(0x0800);
+
+    iph->ihl = 5;
+    iph->version = 4;
+    iph->tos = 0;
+    //iph->tot_len = htons(sizeof(*iph) + sizeof(*tcph) + len);
+    iph->id = 12345;
+    iph->frag_off = htons(16384);
+    iph->ttl = 64;
+    //iph->protocol = 6;
+    iph->check = 0;
+    ip_str2n(&iph->daddr, dst);
+    ip_str2n(&iph->saddr, src);
+    //ip_update_check(iph);
+
+    if(strcasecmp(protocol, "tcp") == 0) {
+        tcph = (t_tcp_hdr*)(iph + 1);
+        payloadd = tcph + 1;
+        memcpy(payloadd, payload, len);
+        ret = sizeof(*ether) + sizeof(*iph) + sizeof(*tcph) + len;
+        iph->tot_len = htons(sizeof(*iph) + sizeof(*tcph) + len);
+        iph->protocol = 6;
+        ip_update_check(iph);
+        
+        tcph->source = htons(sport);
+        tcph->dest = htons(dport);
+        tcph->seq = 1;
+        tcph->ack_seq = 2;
+        tcph->doff = 5;
+        tcph->fin = 0;
+        tcph->syn = 1;
+        tcph->rst = 0;
+        tcph->psh = 0;
+        tcph->ack = 0;
+        tcph->urg = 0;
+        tcph->window = htons(64240); 
+        tcph->check = 0;
+        tcph->urg_ptr = 0;
+        tcp_update_check(iph);
+    } else if(strcasecmp(protocol, "udp") == 0) {
+        udph = (t_udp_hdr*)(iph + 1);
+        payloadd = udph + 1;
+        memcpy(payloadd, payload, len);
+        ret = sizeof(*ether) + sizeof(*iph) + sizeof(*udph) + len;
+        iph->tot_len = htons(sizeof(*iph) + sizeof(*udph) + len);
+        iph->protocol = 17;
+        ip_update_check(iph);
+
+        udph->source = htons(sport);
+        udph->dest = htons(dport);
+        udph->len = htons(sizeof(*udph) + len);
+        udph->check = 0;
+        udp_update_check(iph);
+    } else if(strcasecmp(protocol, "icmp") == 0) {
+        icmph = (t_icmp_hdr*)(iph + 1);
+        payloadd = icmph + 1;
+        memcpy(payloadd, payload, len);
+        ret = sizeof(*ether) + sizeof(*iph) + sizeof(*icmph) + len;
+        iph->tot_len = htons(sizeof(*iph) + sizeof(*icmph) + len);
+        iph->protocol = 1;
+        ip_update_check(iph);
+
+        icmph->type = 8;
+        icmph->code = 0;
+        icmph->un.echo.id = 1024;
+        icmph->un.echo.sequence = 1280;
+        icmp_igmp_update_check(iph);
+    } else {
+        printf("%s is not support!\n", protocol);
+        return -1;
+    }
+
+    g_apt_streams[0]->len = ret;
+    g_apt_streams[0]->selected=1;
+    g_apt_streams[0]->err_flags = 0;
+
+    g_apt_streams[0]->err_flags = build_err_flags((void *)(g_apt_streams[0]->data), g_apt_streams[0]->len);
+    if (g_apt_streams[0]->err_flags)
+            printf("input packet has errors: %s\n", err_text(g_apt_streams[0]->err_flags));
+
+    ret=ret>0?0:ret;
+    return ret;
+}

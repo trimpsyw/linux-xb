@@ -8,136 +8,58 @@
 # ” œ‰: sunmingbao@126.com
 # 
 
-BUILD_TIME:=$(shell echo %date:~0,10%) $(shell echo %time:~0,8%)
+# CROSS_COMPILE=arm-linux-
+export os_name:=$(shell uname)
+ifeq ($(os_name),Linux)
+export is_linux:=yes
+else
+export is_linux:=no
+endif
 
-CC := gcc
+export CC:=$(CROSS_COMPILE)gcc
+export CFLAGS:=-c -O2 -Wall -fno-strict-overflow -fno-strict-aliasing
+export LD:=$(CROSS_COMPILE)ld
+export AR:=$(CROSS_COMPILE)ar
 
-CFLAG := -Wall -O2 -fno-strict-overflow -fno-strict-aliasing -DBUILD_TIME='"$(BUILD_TIME)"' -D_WIN32_IE=0x0501 -D_WIN32_WINNT=0x0502 -DWINVER=0x0501 -DHAVE_REMOTE -DWPCAP 
-LDFLAG := -mwindows  -s  -lkernel32 -luser32 -lgdi32 -lcomctl32 -lws2_32 -lwininet -liphlpapi -lWinmm -lwpcap 
+export RM:=rm
+export MKDIR:=mkdir
 
-#CFLAG := $(CFLAG) -D_DEBUG
-CFLAG := $(CFLAG) -fno-strict-aliasing
+export project_root_path:=$(shell pwd)
+export lib_src_path:=$(project_root_path)/src
+export app_code_path:=$(project_root_path)/apps
+export INC_DIRS:=-I./ -I$(project_root_path)/inc
 
-PRJ_DIR:=.
-RES_DIR := $(PRJ_DIR)\res
-INC_RES_DIRS := --include-dir $(RES_DIR)
-INC_DIRS := -I$(PRJ_DIR)\inc -I$(RES_DIR)
-OBJ_DIR:=$(PRJ_DIR)\obj
+export project_target_path:=$(project_root_path)/target
 
-CFLAG := $(CFLAG) $(INC_DIRS)
-WINDRES_FLAG := --use-temp-file $(INC_RES_DIRS)
+export LIB_DEP_PATH:=$(project_target_path)/lib/dep
+export LIB_OBJ_PATH:=$(project_target_path)/lib/obj
+export APP_LIB_NAME:=app_lib
+export LIB_FILE_STATIC:=$(project_target_path)/lib/$(APP_LIB_NAME).a
+export LIB_FILE_DYNAMIC:=$(project_target_path)/lib/$(APP_LIB_NAME).so
 
-# -------------------------------------------------------------------------
-# Do not modify the rest of this file!
-# -------------------------------------------------------------------------
+export APP_CODE_DEP_PATH:=$(project_target_path)/app_code/dep
+export APP_CODE_OBJ_PATH:=$(project_target_path)/app_code/obj
 
-### Variables: ###
-target := $(OBJ_DIR)\xb_ether_tester.exe
+export LDFLAGS:=-rdynamic -L$(project_target_path)/lib/
+#export LDFLAGS := $(LDFLAGS) -static
+export C_LIBS:=-ldl -lpthread 
 
-OBJECTS :=  \
-	$(OBJ_DIR)\main.o \
-	$(OBJ_DIR)\frame_window.o \
-	$(OBJ_DIR)\left_window.o \
-	$(OBJ_DIR)\right_window.o \
-	$(OBJ_DIR)\bottom_window.o \
-	$(OBJ_DIR)\splitters.o \
-	$(OBJ_DIR)\toolbar_statusbar.o \
-	$(OBJ_DIR)\tip_window.o \
-	$(OBJ_DIR)\hex_edit_window.o \
-	$(OBJ_DIR)\packets_rx_tx.o \
-	$(OBJ_DIR)\stats_window.o \
-	$(OBJ_DIR)\stream_edit_dlg.o \
-	$(OBJ_DIR)\net.o \
-	$(OBJ_DIR)\history.o \
-	$(OBJ_DIR)\common.o \
-	$(OBJ_DIR)\gui.o \
-	$(OBJ_DIR)\ver_update.o \
-	$(OBJ_DIR)\sample_pkts.o \
-	$(OBJ_DIR)\debug.o \
-	$(OBJ_DIR)\res.orc
+.PHONY:default prepare clean
 
-### Targets: ###
-
-default: prepare  clean  $(target)
-
-
-$(target): $(OBJECTS)
-	$(CC) -o $@ $(OBJECTS)  $(LDFLAG)
-
-$(OBJ_DIR)\res.orc: $(PRJ_DIR)\res\sample.rc
-	windres $(WINDRES_FLAG) -i $< -o $@  
-
-$(OBJ_DIR)\main.o: $(PRJ_DIR)\src\main.c
-	$(CC) -c $(CFLAG)  -o $@  $<
-
-$(OBJ_DIR)\frame_window.o: $(PRJ_DIR)\src\frame_window.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\left_window.o: $(PRJ_DIR)\src\left_window.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\right_window.o: $(PRJ_DIR)\src\right_window.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\bottom_window.o: $(PRJ_DIR)\src\bottom_window.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\splitters.o: $(PRJ_DIR)\src\splitters.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\toolbar_statusbar.o: $(PRJ_DIR)\src\toolbar_statusbar.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\tip_window.o: $(PRJ_DIR)\src\tip_window.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\hex_edit_window.o: $(PRJ_DIR)\src\hex_edit_window.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\packets_rx_tx.o: $(PRJ_DIR)\src\packets_rx_tx.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\stats_window.o: $(PRJ_DIR)\src\stats_window.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\stream_edit_dlg.o: $(PRJ_DIR)\src\stream_edit_dlg.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\net.o: $(PRJ_DIR)\src\net.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\history.o: $(PRJ_DIR)\src\history.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\common.o: $(PRJ_DIR)\src\common.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\gui.o: $(PRJ_DIR)\src\gui.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\ver_update.o: $(PRJ_DIR)\src\ver_update.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\debug.o: $(PRJ_DIR)\src\debug.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-$(OBJ_DIR)\sample_pkts.o: $(PRJ_DIR)\src\sample_pkts.c
-	$(CC) -c $(CFLAG) -o $@  $<
-
-installer:
-	makensis $(PRJ_DIR)\xb_ether_tester.nsi
-	
-clean:
-	-cmd.exe /c del /F /Q  $(OBJ_DIR)\\*
-	-cmd.exe /c copy /y profile.ini  .\$(OBJ_DIR)\\
-	-cmd.exe /c copy /y version_update.ini .\$(OBJ_DIR)\\
+default:prepare
+#	@echo $(is_linux)
+	make -C $(lib_src_path)
+	make -C $(app_code_path)
+	@echo build project done!
 
 prepare:
-	-cmd.exe /c mkdir  $(OBJ_DIR)
-	
-all: default installer
+	@$(MKDIR) -p $(project_target_path)
+	@$(MKDIR) -p $(LIB_DEP_PATH)
+	@$(MKDIR) -p $(LIB_OBJ_PATH)
+	@$(MKDIR) -p $(APP_CODE_DEP_PATH)
+	@$(MKDIR) -p $(APP_CODE_OBJ_PATH)
 
-.PHONY: all prepare default installer clean
-
-
+clean:
+	$(RM) -rf $(project_target_path)
+	@echo clean project done!
 

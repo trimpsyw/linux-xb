@@ -1,37 +1,16 @@
 
-1. 编译环境准备
+登陆Linux shell，进入源码包的linux-xb目录，执行如下命令即可。
+(编译生成的可执行程序路径为 ./target/xb_ether_tester.exe)
 
-a).安装工具链 
-下载并安装32位的tdm-gcc工具链。
-安装完成后，将工具链安装目录下的bin目录添加到PATH环境变量中。
+a) 编译pc版本
+make
 
-b).安装WpdPack库。
-http://www.winpcap.org/install/bin/WpdPack_4_1_2.zip
-从上述地址下载WpdPack库。
-解压后：
-i) 将WpdPack\Include下面的内容，拷贝到tdm-gcc工具链安装目录下的include目录中。
-ii)将WpdPack\Lib下面的内容，拷贝到tdm-gcc工具链安装目录下的lib目录中。
 
-c). 安装打包工具nsis
-http://sourceforge.net/projects/nsis/files/latest/download?source=files
-从上述地址下载nsis打包工具。
-安装后，将nsis的安装目录添加到PATH环境变量中。
+b) 交叉编译
+例如编译arm版本，带上如下CROSS_COMPILE参数即可
+make  CROSS_COMPILE=arm-linux-
 
-2. 编译
 
-打开dos窗口，进入源码根目录。
-执行相应的命令，即可生成相应的目标。
-所有的目标，均会生成到obj目录下。
-
-a)编译程序
-mingw32-make 
-
-b)生成安装包
-mingw32-make installer
-
-c)编译程序，并生成安装包
-mingw32-make all
-
-d)清空所有目标
-mingw32-make clean
+c) 清空目标文件
+make clean
 
